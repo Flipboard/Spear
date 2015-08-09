@@ -25,6 +25,7 @@
     License.
 
 """
+
 __author__ = "Michael G. Noll"
 __copyright__ = "(c) 2009-2010 Michael G. Noll and Ching-man Au Yeung"
 __description__ = "The reference implementation of the SPEAR ranking algorithm."
@@ -36,44 +37,43 @@ __url__ = "http://www.quuxlabs.com/"
 __version__ = "1.0"
 
 import datetime
-import sys
 import unittest
 
 try:
     from scipy import sparse
     """
-    Note: The following program makes use of the sparse matrix module in SciPy
-          In general, a lil_matrix is created first as it provides more convenient indexing.
-          The matrix will then be converted into a csr_matrix for faster computation of multiplications.
+    Note: The following program makes use of the sparse matrix module in SciPy.
+          In general, a lil_matrix is created first as it provides more
+          convenient indexing. The matrix will then be converted into a
+          csr_matrix for faster computation of multiplications.
     """
     import numpy
 except:
-    print "ERROR: could not import SciPy or NumPy Python module"
-    print ""
-    print "You can download SciPy and NumPy at"
-    print "http://www.scipy.org/Download"
-    print
-    raise
+    raise ImportError('Could not import SciPy or NumPy Python module. Install '
+                      'them both before continuing. \nYou can download SciPy '
+                      'and NumPy at: http://www.scipy.org/install.html')
 
 
 class Spear(object):
 
     def __init__(self, activities):
         """
-            Initialize the SPEAR algorithm with input activities.
+        Initialize the SPEAR algorithm with input activities.
 
-        @param A: List of (timestamp, user, resource) tuples.
-            A (timestamp, user, resource) tuple represents that <user>
+        :param List activities: List of (timestamp, user, resource) tuples.
+            (timestamp, user, resource) tuple represents that <user>
             'acted on' <resource> on date/time <timestamp>.
 
             Example:
             [
-                (datetime.datetime(2010,7,1,9,0,0), "alice", "http://www.quuxlabs.com/"),
-                (datetime.datetime(2010,8,1,12,45,0), "bob", "http://www.quuxlabs.com/"),
+                (datetime.datetime(2010,7,1,9,0,0), "alice",
+                 "http://www.quuxlabs.com/"),
+                (datetime.datetime(2010,8,1,12,45,0), "bob",
+                 "http://www.quuxlabs.com/"),
             ]
-        @param type: list
-
+        :return: Integer score or string resource
         """
+
         self.activities = activities
         # Sort activity data by timestamp (oldest first).
         self.activities.sort()
@@ -91,14 +91,14 @@ class Spear(object):
         # for addressing cells in matrices.
         self._user2id = {}
         self._id2user = {}
-        for id, user in enumerate(self.users):
-            self._user2id[user] = id
-            self._id2user[id] = user
+        for user_id, user in enumerate(self.users):
+            self._user2id[user] = user_id
+            self._id2user[user_id] = user
         self._resource2id = {}
         self._id2resource = {}
-        for id, resource in enumerate(self.resources):
-            self._resource2id[resource] = id
-            self._id2resource[id] = resource        
+        for resource_id, resource in enumerate(self.resources):
+            self._resource2id[resource] = resource_id
+            self._id2resource[resource_id] = resource
     
     def get_users(self):
         return self._users
@@ -110,28 +110,26 @@ class Spear(object):
     resources = property(fget=get_resources,
                          doc="Returns the set of resources found in activities")
     
-    def _get_userid(self, user):
+    def _get_user_id(self, user):
         return self._user2id[user]
 
-    def _get_user(self, userid):
-        return self._id2user[userid]
+    def _get_user(self, user_id):
+        return self._id2user[user_id]
     
-    def _get_resourceid(self, resource):
+    def _get_resource_id(self, resource):
         return self._resource2id[resource]
 
-    def _get_resource(self, resourceid):
-        return self._id2resource[resourceid]
+    def _get_resource(self, resource_id):
+        return self._id2resource[resource_id]
 
     def _populate(self, A):
         """
-        Populates the adjacency matrix A for use with the discoverer-follower scheme.
-    
-        @param A: Empty adjacency matrix A (a numpy matrix), which maps users
+        Populates the adjacency matrix A for use with the discoverer-follower
+        scheme.
+
+        :param A: Empty adjacency matrix A (a numpy matrix), which maps users
             to resources.
-        @param type: list
-        
-        @return: Populated adjacency matrix A (a numpy matrix).
-    
+        :return: Populated adjacency matrix A (a numpy matrix).
         """
     
         # Calculate the number of actions per resource.
@@ -147,8 +145,8 @@ class Spear(object):
     
         # Score to be assigned to the next user.
         #
-        # The first user will receive a score equals to number of total actions + 1,
-        # and the last user will receive a score of 1.
+        # The first user will receive a score equals to number of total
+        # actions + 1, and the last user will receive a score of 1.
         #
         current_score = {}
 
@@ -178,45 +176,50 @@ class Spear(object):
             
             current_num_users.setdefault(resource, 0)
             if timestamp == prev_timestamp_of_docs.get(resource):
-                A[self._get_userid(user),self._get_resourceid(resource)] = current_score[resource]
+                A[self._get_user_id(user), self._get_resource_id(resource)] = \
+                    current_score[resource]
             else:
-                current_score[resource] = num_actions[resource] - current_num_users[resource]
-                A[self._get_userid(user),self._get_resourceid(resource)] = current_score[resource]
+                current_score[resource] = \
+                    num_actions[resource] - current_num_users[resource]
+                A[self._get_user_id(user), self._get_resource_id(resource)] = \
+                    current_score[resource]
                 prev_timestamp_of_docs[resource] = timestamp
             current_num_users[resource] += 1 
     
         return A
 
-    def _apply_credit_scores(self, A, C):
+    @staticmethod
+    def _apply_credit_scores(A, C):
         """
         Applies credit scores to the adjacency matrix A.
     
-        @param A: Populated adjacency matrix A (a numpy matrix), which maps users to resources.
-        @param type: list
-        
-        @param C: Credit score function C().
+        :param A: Populated adjacency matrix A (a numpy matrix), which maps
+            users to resources.
+
+        :param C: Credit score function C().
             See the documentation of C at Spear.run().
-        @param type: A function that takes a numeric argument and returns a float 
+            A function that takes a numeric argument and returns a float
         
-        @return: Adjacency matrix A (a numpy matrix), with credit scores applied.
-    
+        @return: Adjacency matrix A (a numpy matrix), with credit scores
+        applied.
         """
-        for i in xrange(len(A.data)):
+
+        for i in range(len(A.data)):
             if A.data[i]:
-                for j in xrange(len(A.data[i])):
+                for j in range(len(A.data[i])):
                     A.data[i][j] = C(A.data[i][j])
 
         return A
 
-    def run(self, iterations=250, C=lambda score: pow(score, 0.5), verbose=True):
+    def run(self, iterations=250, C=lambda score: pow(score, 0.5),
+            verbose=True):
         """
         Runs the SPEAR algorithm to find the Top users (experts) and resources.
-    
-        @param iterations: Number of iterations for the algorithm.
+
+        :param Integer iterations: Number of iterations for the algorithm.
             Default: 250
-        @param type: int
-    
-        @param C: Credit score function C().
+
+        :param C: Credit score function C().
             Default: the root function, i.e. C(x) = x^0.5
             
             The default value of C is the parameter used in the SPEAR
@@ -229,26 +232,27 @@ class Spear(object):
             return a value of 0 (zero) for the input values of 0 (zero),
             regardless of the function passed for the parameter C.
             In other words, it is fixed that C(0) == 0.
-        @param type: a function that takes a numeric argument and returns a float 
 
-        @param verbose: If True (default), print some status information
-            to STDOUT during computation.
-        @param type: bool
+            Type: A function that takes a numeric argument and returns a float
+
+        :param Boolean verbose: If True (default), print some status
+            information to STDOUT during computation.
     
-        @return: A tuple of lists (expertise_results, quality_results), which
-            contains ranked lists of (expertise_score, user) and (quality_score, resource)
-            tuples, respectively. The lists are ranked, i.e. the best items are listed first.
-    
+        :return: A tuple of lists (expertise_results, quality_results), which
+            contains ranked lists of (expertise_score, user) and
+            (quality_score, resource) tuples, respectively. The lists are
+            ranked, i.e. the best items are listed first.
         """
+
         # A: user-resource matrix (adjacency matrix)
-        A = sparse.lil_matrix( (len(self.users), len(self.resources)) )
+        A = sparse.lil_matrix((len(self.users), len(self.resources)))
         
         if verbose:
-            print "Step 1) Populating adjacency matrix A"
+            print('Step 1) Populating adjacency matrix A')
         A = self._populate(A)
 
         if verbose:
-            print "Step 2) Applying credit score function C() to A"
+            print('Step 2) Applying credit score function C() to A')
         A = self._apply_credit_scores(A, C)
 
         A = A.tocsr()
@@ -256,7 +260,8 @@ class Spear(object):
         # E: expertise vector for users
         #
         # For the record, setting E to [1, 1, ..., 1] is not really needed
-        # as E will be overwritten in the very first iteration step (E = Q x A^T).
+        # as E will be overwritten in the very first iteration step
+        #   (E = Q x A^T).
         #
         E = numpy.ones(len(self.users))
     
@@ -267,8 +272,9 @@ class Spear(object):
         # Update expertise and quality iteratively = mutual reinforcement
         #
         if verbose:
-            print "Step 3) Mutual reinforcement using %d iterations ***this might take some time***" % (iterations)
-        for i in xrange(iterations):
+            print('Step 3) Mutual reinforcement using %i iterations ***this '
+                  'might take some time***' % (iterations,))
+        for i in range(iterations):
             # E is the y_p weight vector in the original HITS algorithm;
             # the next line is HITS' "O" operation, which is based on the
             # "out-degree" of Web pages; in our case, "out-degree" is not
@@ -298,10 +304,13 @@ class Spear(object):
             Q = Q / Q.sum()
 
         if verbose:
-            print "Step 4) Sorting vectors E and Q by expertise and quality scores, respectively"
-        expertise_results = [ (expertise_score, self._get_user(userid)) for userid, expertise_score in enumerate(E) ]
+            print('Step 4) Sorting vectors E and Q by expertise and quality '
+                  'scores, respectively')
+        expertise_results = [(expertise_score, self._get_user(user_id)) for
+                             user_id, expertise_score in enumerate(E)]
         expertise_results.sort(reverse=True)
-        quality_results = [ (quality_score, self._get_resource(resourceid)) for resourceid, quality_score in enumerate(Q) ]
+        quality_results = [(quality_score, self._get_resource(resource_id)) for
+                           resource_id, quality_score in enumerate(Q)]
         quality_results.sort(reverse=True)
     
         return expertise_results, quality_results
@@ -311,40 +320,46 @@ class SpearTester(unittest.TestCase):
 
     def testSpearOnSampleData(self):
         
-        USERS = ["Steve Jobs", "Bill Gates", "Sergey Brin", "Larry Page"]
-        RESOURCES = ["D1", "D2", "D3"]
-        EXPERTISE_RESULTS = [
-            (0.42154381, USERS[0]),
-            (0.32808641, USERS[1]),
-            (0.21227046, USERS[2]),
-            (0.03809933, USERS[3]),
-        ]
-        QUALITY_RESULTS = [
-            (0.52695009, RESOURCES[1]),
-            (0.34629657, RESOURCES[0]),
-            (0.12675334, RESOURCES[2]),
-        ]
+        users = ["Steve Jobs", "Bill Gates", "Sergey Brin", "Larry Page"]
+        resources = ["D1", "D2", "D3"]
+
+        expertise_results = [(0.42154381, users[0]),
+                             (0.32808641, users[1]),
+                             (0.21227046, users[2]),
+                             (0.03809933, users[3])]
+        quality_results = [(0.52695009, resources[1]),
+                           (0.34629657, resources[0]),
+                           (0.12675334, resources[2])]
+
         activities = []
-        activities.append((datetime.datetime(2010,7,1,9,0,0), USERS[0], RESOURCES[0]))
-        activities.append((datetime.datetime(2010,7,2,9,0,0), USERS[1], RESOURCES[0]))
-        activities.append((datetime.datetime(2010,6,1,9,0,0), USERS[0], RESOURCES[1]))
-        activities.append((datetime.datetime(2010,6,1,10,0,0), USERS[1], RESOURCES[1]))
-        activities.append((datetime.datetime(2010,6,2,11,0,0), USERS[2], RESOURCES[1]))
-        activities.append((datetime.datetime(2010,6,10,12,0,0), USERS[2], RESOURCES[2]))
-        activities.append((datetime.datetime(2010,6,14,12,0,0), USERS[3], RESOURCES[2]))
+        activities.append((datetime.datetime(2010, 7, 1, 9, 0, 0), users[0],
+                           resources[0]))
+        activities.append((datetime.datetime(2010, 7, 2, 9, 0, 0), users[1],
+                           resources[0]))
+        activities.append((datetime.datetime(2010, 6, 1, 9, 0, 0), users[0],
+                           resources[1]))
+        activities.append((datetime.datetime(2010, 6, 1, 10, 0, 0), users[1],
+                           resources[1]))
+        activities.append((datetime.datetime(2010, 6, 2, 11, 0, 0), users[2],
+                           resources[1]))
+        activities.append((datetime.datetime(2010, 6, 10, 12, 0, 0), users[2],
+                           resources[2]))
+        activities.append((datetime.datetime(2010, 6, 14, 12, 0, 0), users[3],
+                           resources[2]))
 
         spear = Spear(activities)
         expertise_results, quality_results = spear.run(verbose=False)
 
-        # check expertise results
+        # Check expertise results
         for index, (expertise_score, user) in enumerate(expertise_results):
-            ref_expertise_score, ref_user = EXPERTISE_RESULTS[index]
-            self.assertAlmostEqual(expertise_score, ref_expertise_score, places=7)
+            ref_expertise_score, ref_user = expertise_results[index]
+            self.assertAlmostEqual(expertise_score, ref_expertise_score,
+                                   places=7)
             self.assertEqual(user, ref_user)
 
-        # check quality results
+        # Check quality results
         for index, (quality_score, resource) in enumerate(quality_results):
-            ref_quality_score, ref_resource = QUALITY_RESULTS[index]
+            ref_quality_score, ref_resource = quality_results[index]
             self.assertAlmostEqual(quality_score, ref_quality_score, places=7)
             self.assertEqual(resource, ref_resource)
         
