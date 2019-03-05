@@ -34,7 +34,7 @@ __license__ = "GPLv2"
 __maintainer__ = "Michael G. Noll"
 __status__ = "Development"
 __url__ = "http://www.quuxlabs.com/"
-__version__ = "1.0"
+__version__ = "2.0"
 
 import datetime
 import unittest
